@@ -1,4 +1,4 @@
-# HPML BAR project, Team D: local stand-in work (snapshot of 2026-11-18)
+# HPML BAR project, Team D: local stand-in work (snapshot of 2026-11-19)
 
 This is a copy of what was built locally on Brian's PC for Team D (closed-loop evaluation).
 It is here so a teammate can read it. It is **not** the team repository and nothing in it
@@ -39,7 +39,8 @@ line before any of it goes into the team repository.
 - bar-harness itself and its `.env` pins (engine `2026.09.02`, BAR commit `3510e77`; both are
   written into every run's `run_settings.json`).
 - Checkpoints, datasets, recordings, run folders and replays (several GB, local only).
-- 50 of the 54 replay screenshots (only the four used in the slides are here).
+- Most of the replay screenshots (two per replayed game are here: the first model, the
+  second model, the win against the idle opponent, the win against SimpleAI).
 
 ## It will not run from this copy as it is
 
@@ -53,9 +54,12 @@ The code expects this layout on disk, which this repository does not reproduce:
 and Docker in WSL with bar-harness set up. `shared/status/team-d.md` has the commands that
 were run. Making it run from a fresh clone has not been done.
 
-## State of the results (2026-11-18)
+## State of the results (2026-11-19, early morning)
 
-No model has won a game. On the six pilot games (three against SimpleAI, three against BARb
-easy, 20 minute cap) every policy we tried won 0; the built-in BARb in the same seat won 16
-of 23 games of that kind. The numbers, the fixes made along the way and what was not checked
-are in the two notes files above.
+Two games have been won: one against the idle opponent and one against SimpleAI
+(`UPDATE_SUMMARY.md`, section 7). The setup that beat SimpleAI won 1 of its first 18
+pilot-style games, and none of the 24 played after two more fixes (12 lost, 12 with no winner
+by the 20 minute cap). The built-in BARb in the same seat wins 16 of 23 games of that kind.
+The winning setup is two learned models (one for building, one for where the army attacks)
+plus one hand-written rule (the army leaves in groups). The numbers, the fixes made along the
+way and what was not checked are in the two notes files above.

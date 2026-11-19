@@ -101,8 +101,10 @@ end
 
 -- Placement step for a build order that has a position. A player's interface does the same
 -- for a human: BAR snaps an extractor to a metal spot and shows where a building cannot go.
---   extractor      -> the nearest metal spot where it can be built (BAR's own spot list)
---   other building -> the nearest place it can be built, within 512 elmos
+--   extractor      -> the nearest metal spot where it can be built (BAR's own spot list),
+--                     if one is within 800 elmos of the ordered position
+--   other building -> the nearest place it can be built, within 1200 elmos (512 often found
+--                     none for a factory near cliffs or water)
 -- Changes a.params in place. Returns false when there is no such place.
 local function place(a)
   local defID, facing = -a.command_id, a.params[4]
@@ -118,10 +120,13 @@ local function place(a)
         best, bestDistance = spot, distance
       end
     end
-    if not best then return false end
+    -- No free spot within 800 elmos of where the order pointed: drop the order. Without this
+    -- limit an extractor order went to the nearest free spot anywhere, and once the spots near
+    -- the base were taken that walked the commander across the map (2026-11-19).
+    if not best or bestDistance > 800 ^ 2 then return false end
     x, z = best.x, best.z
   else
-    local bx, _, bz = Spring.ClosestBuildPos(team, defID, x, Spring.GetGroundHeight(x, z), z, 512, 0, facing)
+    local bx, _, bz = Spring.ClosestBuildPos(team, defID, x, Spring.GetGroundHeight(x, z), z, 1200, 0, facing)
     if not bx or bx < 0 then return false end
     x, z = bx, bz
   end

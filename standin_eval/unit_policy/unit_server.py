@@ -18,7 +18,13 @@ reused), so run_fullgame.ps1 and the bridge work unchanged. What is different is
 
 Environment: STANDIN_SAMPLE_SEED (random seed), STANDIN_TEMPERATURE (default 1; 0 = greedy),
 STANDIN_QUEUE_DEPTH (default 3; 1 = only idle units get orders), STANDIN_ARMY_CHECKPOINT (a
-second unit_policy.pt: it orders the units that do not build, --checkpoint orders the rest).
+second unit_policy.pt: it orders the units that do not build, --checkpoint orders the rest),
+STANDIN_ARMY_TYPES (the only order types the army checkpoint may give, comma separated),
+STANDIN_MAIN_TYPES (the same for --checkpoint; "@build,@factory" = build orders only),
+STANDIN_POSITION_TEMPERATURE (sampling temperature of --checkpoint's position offsets),
+STANDIN_ARMY_TEMPERATURE (its own sampling temperature), STANDIN_ARMY_SHARE (default 1: the
+share of the non-building units that follow the army checkpoint), STANDIN_ARMY_WAVE (default 0:
+army units wait until this many are waiting and then leave together; a hand-written rule).
 """
 
 from collections import Counter
@@ -63,9 +69,12 @@ class Loaded:
         # strict=False: checkpoints saved before the map-position input have no place_in weights
         self.model.load_state_dict(saved["weights"], strict=False)
         self.map_position = saved["model"].get("map_position", False)
-        if "place_in.weight" not in saved["weights"]:      # such a checkpoint must get exactly 0 from it
-            torch.nn.init.zeros_(self.model.place_in.weight)
-            torch.nn.init.zeros_(self.model.place_in.bias)
+        self.home = saved["model"].get("home", False)
+        self.counts = saved["model"].get("counts", False)
+        for layer in ("place_in", "home_in", "counts_in"):              # a checkpoint without the layer must get exactly 0 from it
+            if layer + ".weight" not in saved["weights"]:
+                torch.nn.init.zeros_(getattr(self.model, layer).weight)
+                torch.nn.init.zeros_(getattr(self.model, layer).bias)
         self.model.eval()
         self.def_number = {value: number + 1 for number, value in enumerate(vocab["defs"])}
         self.command_number = {value: number + 1 for number, value in enumerate(vocab["commands"])}
@@ -92,6 +101,16 @@ class Loaded:
         return def_id if self.to_own is None else self.to_own.get(def_id, 0)
 
 
+def limit_types(loaded, names):
+    """Leave a checkpoint only the order types listed in `names` (comma separated; a name that
+    starts with @ matches every type ending with it). Unit types left with no type are dropped."""
+    only = [name for name in names.split(",") if name]
+    if only:
+        endings = tuple(name for name in only if name.startswith("@"))
+        keep = torch.tensor([key in only or (bool(endings) and key.endswith(endings)) for key in loaded.types])
+        loaded.allowed = {def_id: mask & keep for def_id, mask in loaded.allowed.items() if bool((mask & keep).any())}
+
+
 def unit_names(checkpoint):
     """The unit type table (number -> name) in a checkpoint's folder."""
     return json.loads((Path(checkpoint).parent / "unit_defs.json").read_text())["unit_defs"]
@@ -112,7 +131,25 @@ class UnitPolicyServer:
                          for number, name in unit_names(os.environ["STANDIN_ARMY_CHECKPOINT"]).items()}
             self.army.to_own = {int(number): number_of[name] for number, name in unit_names(checkpoint).items()
                                 if name in number_of}
+            # STANDIN_ARMY_TYPES: the only order types the army checkpoint may give, e.g.
+            # "FIGHT@pos,ATTACK@unit". Empty = every type it learned.
+            limit_types(self.army, os.environ.get("STANDIN_ARMY_TYPES", ""))
+        # STANDIN_MAIN_TYPES: the same for the main checkpoint, e.g. "@build,@factory" (a name
+        # that starts with @ stands for every type ending with it).
+        limit_types(self.main, os.environ.get("STANDIN_MAIN_TYPES", ""))
+        self.army_share = float(os.environ.get("STANDIN_ARMY_SHARE", "1"))
+        # STANDIN_ARMY_WAVE (0 = off): a hand-written rule, not something the model learned. Army
+        # units wait without orders until this many of them are waiting; then all of them are
+        # released together and from then on follow the army checkpoint. So attacks leave in
+        # groups instead of one unit at a time.
+        self.army_wave = int(os.environ.get("STANDIN_ARMY_WAVE", "0"))
+        self.released = set()                         # ids of the army units already sent out
+        self.start = None                             # where our team started this game (x, z)
         self.temperature = float(os.environ.get("STANDIN_TEMPERATURE", "1"))
+        # the army checkpoint can sample at its own temperature (default: the same)
+        self.army_temperature = float(os.environ.get("STANDIN_ARMY_TEMPERATURE", self.temperature))
+        # the main checkpoint's offsets (where an order goes) can be sampled at their own temperature
+        self.position_temperature = float(os.environ.get("STANDIN_POSITION_TEMPERATURE", self.temperature))
         self.queue_depth = int(os.environ.get("STANDIN_QUEUE_DEPTH", "3"))
         torch.manual_seed(int(os.environ.get("STANDIN_SAMPLE_SEED", "0")))
         self.fired, self.last_order = fired, {}       # unit id -> frame of our last order to it
@@ -121,14 +158,20 @@ class UnitPolicyServer:
         # at once (buffering=1), so after a policy timeout it shows whether the request arrived.
         self.log = open(os.environ.get("STANDIN_SERVER_LOG", HERE / "server_requests.log"), "w", buffering=1)
 
-    def expert_for(self, def_id):
-        """The checkpoint that orders this unit type, or None when neither has orders for it."""
-        if self.army and def_id not in self.main.builders and self.army.own(def_id) in self.army.allowed:
+    def expert_for(self, def_id, unit_id=0):
+        """The checkpoint that orders this unit, or None when neither has orders for its type.
+        With STANDIN_ARMY_SHARE below 1 only that share of the units that do not build follow
+        the army checkpoint (chosen by unit id, so a unit keeps its checkpoint all game); the
+        others follow the main one like the builders."""
+        to_army = (int(unit_id) * 7919) % 100 < self.army_share * 100
+        if self.army and to_army and def_id not in self.main.builders and self.army.own(def_id) in self.army.allowed:
             return self.army
         return self.main if def_id in self.main.allowed else None
 
     def reset(self, request):
         self.last_order.clear()
+        self.released.clear()
+        self.start = None
         self.answered = (None, None)
         return response(request)
 
@@ -138,8 +181,11 @@ class UnitPolicyServer:
         found = []
         for unit in units:
             def_id = int(unit.get("defID") or 0)
-            if unit["teamID"] != team or unit["buildProgress"] < 1 or self.expert_for(def_id) is None:
+            expert = self.expert_for(def_id, unit["id"])
+            if unit["teamID"] != team or unit["buildProgress"] < 1 or expert is None:
                 continue
+            if expert is self.army and self.army_wave and unit["id"] not in self.released:
+                continue                              # still waiting for its wave
             factory = def_id in self.main.factories
             if frame - self.last_order.get(unit["id"], -10000) < (FACTORY_COOLDOWN if factory else COOLDOWN):
                 continue
@@ -175,12 +221,25 @@ class UnitPolicyServer:
 
     def decide(self, request):
         observation, team, frame = request["observation"], request["team_id"], request["source_frame"]
+        if self.start is None:                        # the first observation of a game: our first own unit
+            own = [u for u in observation["units"] or [] if u["teamID"] == team]
+            if own:
+                self.start = (own[0]["position"][0], own[0]["position"][2])
+        if self.army and self.army_wave:              # release a wave when enough army units wait
+            waiting = [u["id"] for u in observation["units"] or []
+                       if u["teamID"] == team and u["buildProgress"] >= 1 and u["id"] not in self.released
+                       and self.expert_for(int(u.get("defID") or 0), u["id"]) is self.army]
+            if len(waiting) >= self.army_wave:
+                self.released.update(waiting)
         found = self.candidates(observation["units"] or [], team, frame)
         if not found:
             self.fired["no_unit_to_order_noop"] += 1
             return response(request)
-        unit, append = min(found, key=lambda pair: (self.last_order.get(pair[0]["id"], -1), pair[0]["id"]))
-        expert = self.expert_for(int(unit["defID"]))
+        # Units of the main checkpoint (builders, factories) go before the army's, so a large army
+        # cannot use up the one order per decision; within a group the longest-waiting unit goes first.
+        unit, append = min(found, key=lambda pair: (self.expert_for(int(pair[0]["defID"]), pair[0]["id"]) is self.army,
+                                                     self.last_order.get(pair[0]["id"], -1), pair[0]["id"]))
+        expert = self.expert_for(int(unit["defID"]), unit["id"])
         arrays = common.featurize(observation, team, frame, keep_first=[unit["id"]])   # the unit is row 0
         numbers = torch.tensor(arrays["numbers"])
         x, z = (numbers[0, 6:8] if append else numbers[0, 0:2]).tolist()        # the reference point
@@ -196,7 +255,10 @@ class UnitPolicyServer:
                  "mask": torch.ones(1, len(numbers), dtype=torch.bool),
                  "resources": torch.tensor(arrays["resources"]).unsqueeze(0),
                  "unit": torch.tensor([0]), "append": torch.tensor([int(append)]),
-                 "place": torch.tensor([[x, z]]) / 4096 if expert.map_position else torch.zeros(1, 2)}
+                 "place": torch.tensor([[x, z]]) / 4096 if expert.map_position else torch.zeros(1, 2),
+                 "home": (torch.tensor([[x, z]]) - torch.tensor([self.start])) / 4096
+                         if expert.home and self.start else torch.zeros(1, 2),
+                 "use_counts": expert.counts}
         is_own = numbers[:, 5] > 0
 
         def targets(type_number):
@@ -211,7 +273,9 @@ class UnitPolicyServer:
         has_target = torch.tensor([not key.endswith("@unit") or bool(targets(number).any())
                                    for number, key in enumerate(expert.types)])
         allowed = expert.allowed[expert.own(int(unit["defID"]))] & has_target
-        choice = expert.model.act(batch, allowed, self.temperature, targets)
+        temperature = self.army_temperature if expert is self.army else self.temperature
+        spread = temperature if expert is self.army else self.position_temperature
+        choice = expert.model.act(batch, allowed, temperature, targets, spread)
         key = expert.types[choice["type"]]
         form = key.split("@")[1] if "@" in key else ("value" if "=" in key else "none")
         params = []

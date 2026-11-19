@@ -44,6 +44,7 @@ def convert(job):
     examples = {name: [] for name in ("state", "unit", "command_id", "append", "target", "dx", "dz",
                                       "facing", "radius", "options")}
     keys, unit_blocks, resources, offsets, rows = [], [], [], [0], 0
+    start_of, homes = {}, []        # team -> (x, z) of its first own unit; one home per stored state
     # Only the teams played by BARb with its default profile are learned from. Some recordings
     # have SimpleAI or BARb "easy" on team 1 (the benchmark's reference games).
     teams = json.loads((folder / "run_settings.json").read_text())["teams"]
@@ -60,6 +61,11 @@ def convert(job):
                 skipped["windows of a team that is not default BARb"] += 1
                 continue
             rows += 1
+            team = int(row["view_team"])
+            if team not in start_of:                     # the first window: the team's commander
+                own = [u for u in row["state"]["units"] if u["teamID"] == team]
+                if own:
+                    start_of[team] = (own[0]["position"][0], own[0]["position"][2])
             # Old recordings kept one order per window ("action"); new ones keep the list.
             orders = row.get("actions") or [row["action"]]
             # unit id -> its first order of the window that the model can give. BARb often
@@ -113,12 +119,14 @@ def convert(job):
             if arrays is not None and examples["state"] and examples["state"][-1] == len(resources):
                 unit_blocks.append(arrays)               # at least one example uses this state
                 resources.append(arrays["resources"])
+                homes.append(start_of.get(team, (0.0, 0.0)))
                 offsets.append(offsets[-1] + len(arrays["unit_id"]))
 
     np.savez_compressed(
         out_dir / f"{folder.name}.npz", type_key=np.array(keys),
         **{name: np.array(values, np.int32) for name, values in examples.items()},
         offsets=np.array(offsets, np.int64), resources=np.array(resources, np.float32),
+        home=np.array(homes, np.float32),               # per state: where that team started
         **{name: np.concatenate([block[name] for block in unit_blocks])
            for name in ("unit_id", "def_id", "queue_command", "tail_command", "numbers")})
     return {"replay_id": folder.name, "split": split, "windows": rows, "examples": len(keys),

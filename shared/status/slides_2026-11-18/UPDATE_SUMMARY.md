@@ -142,3 +142,49 @@ Win rate = games won / games played; a game that reaches the cap with no winner 
 
 The scripts that made the images are in the same folder (`make_charts.py`,
 `make_diagram.py`, `hpml_replay_shots.lua`, `take_replay_shots.ps1`).
+
+## 7. Later, night of 2026-11-18 to 11-19: the first wins
+
+Sections 1 to 6 were written on the evening of 2026-11-18, before any win. Since then (every
+run and number is in `team-d.md`):
+
+**Two games won.**
+
+| Game | Opponent | Result | Value killed / lost | Screenshots |
+|---|---|---|---|---|
+| `game_20261118_232242` | idle opponent (NullAI) | won at 16:46 | 3,133 / 1,119 | `replay_first-win_idle-opponent\` |
+| `game_20261119_020057` | SimpleAI | won at 16:43 | 8,683 / 2,064 | `replay_first-win_vs-simpleai\` |
+
+**How often.** The setup that beat SimpleAI won 1 of its first 18 pilot-style games (12 lost,
+5 no winner by the cap). After two more fixes it played 24 more: 0 won, 12 lost, 12 no
+winner by the cap. So: it can win, and it mostly does not.
+
+**The setup that won** (two learned models and one hand-written rule):
+- a model trained only on the orders BARb gave its builders and factories
+  (`unit-barb-econ-v1`), allowed build orders only, one order per builder at a time;
+- a model trained on all of BARb's orders with two more inputs, the map position and the
+  team's start position (`unit-barb-v3a`), used for the units that do not build, allowed
+  attack-move and attack orders only, sampled at temperature 0.2;
+- the hand-written rule: army units wait at the base until 15 are waiting, then leave together.
+
+**What was measured on the way**
+- BARb in our seat wins 16 of 23 twenty-minute games against the same two opponents (the six
+  pilot games alone had shown 2 of 6).
+- BARb has its first factory at 1:16 and 16 to 53 combat units at minute 10. The human-data
+  model had its first factory at 4:29 or later and 0 to 8 combat units at minute 10. The
+  builder-only model has its factory at 1:21 to 1:47.
+- BARb's plain move orders make no net progress toward the enemy (mean -16 elmos per order);
+  its attack-move orders gain 281. Without the start-position input the model's
+  attack-moves pointed backward on average; with it, at temperature 0.2, 93% to 97% of
+  them point toward the enemy.
+- Problems found and fixed in how the model is run: a retry for the request that never
+  reached the server (5 games cut short in 16 before, none in the games since); a unit was
+  re-ordered before its last order showed up in what the model sees; the commander stuck
+  behind a guard order; an extractor order was moved to a free metal spot any distance
+  away; build positions drawn from the far distance classes.
+
+**Not settled**
+- Three or six games per setup were not enough to tell setups apart: a setup that led
+  SimpleAI in all three games at the 20 minute cap lost all three in the next run.
+- With a 40 minute cap BARb won 3 of 3 against SimpleAI; our setup at the time lost 6 of 6.
+- The charts and tables in sections 3 and 6 do not include these later setups.

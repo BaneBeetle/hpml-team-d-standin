@@ -1,0 +1,85 @@
+{
+ "source": "standin",
+ "name": "pilot-v1-more",
+ "note": "More repeats of the pilot-v1 games (repeat numbers 4 to 9), to see how often a setup wins. A stand-in fixture.",
+ "map": "Supreme Isthmus v2.1",
+ "team_0": "Armada: the policy under test",
+ "team_1": "Cortex: the opponent",
+ "place_builds": true,
+ "save_replay": true,
+ "repeat_meaning": "Games differ run to run even with the engine's fixed seed, so a repeat is one more independent game. For a sampled policy the repeat number is also its sampling seed.",
+ "episodes": [
+  {
+   "id": "simple-4",
+   "opponent": "simple",
+   "cap_minutes": 20,
+   "repeat": 4
+  },
+  {
+   "id": "simple-5",
+   "opponent": "simple",
+   "cap_minutes": 20,
+   "repeat": 5
+  },
+  {
+   "id": "simple-6",
+   "opponent": "simple",
+   "cap_minutes": 20,
+   "repeat": 6
+  },
+  {
+   "id": "simple-7",
+   "opponent": "simple",
+   "cap_minutes": 20,
+   "repeat": 7
+  },
+  {
+   "id": "simple-8",
+   "opponent": "simple",
+   "cap_minutes": 20,
+   "repeat": 8
+  },
+  {
+   "id": "simple-9",
+   "opponent": "simple",
+   "cap_minutes": 20,
+   "repeat": 9
+  },
+  {
+   "id": "barb-easy-4",
+   "opponent": "barb-easy",
+   "cap_minutes": 20,
+   "repeat": 4
+  },
+  {
+   "id": "barb-easy-5",
+   "opponent": "barb-easy",
+   "cap_minutes": 20,
+   "repeat": 5
+  },
+  {
+   "id": "barb-easy-6",
+   "opponent": "barb-easy",
+   "cap_minutes": 20,
+   "repeat": 6
+  },
+  {
+   "id": "barb-easy-7",
+   "opponent": "barb-easy",
+   "cap_minutes": 20,
+   "repeat": 7
+  },
+  {
+   "id": "barb-easy-8",
+   "opponent": "barb-easy",
+   "cap_minutes": 20,
+   "repeat": 8
+  },
+  {
+   "id": "barb-easy-9",
+   "opponent": "barb-easy",
+   "cap_minutes": 20,
+   "repeat": 9
+  }
+ ]
+}

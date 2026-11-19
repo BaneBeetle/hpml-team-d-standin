@@ -47,6 +47,10 @@ class UnitPolicy(nn.Module):
         self.resources_in = nn.Linear(len(common.RESOURCE_FIELDS) * 2 + 1, d)
         self.append_embed = nn.Embedding(2, d)                  # is the order appended to the queue
         self.place_in = nn.Linear(2, d)       # the reference point on the map; zeros when not used
+        self.home_in = nn.Linear(2, d)        # reference point minus the team's start position; zeros when not used
+        # how many finished own units of every unit type the team has (log scale); zeros when not used.
+        # The pooled unit vectors say WHAT exists; this says HOW MANY, e.g. "2 extractors, no lab yet".
+        self.counts_in = nn.Linear(n_defs, d)
         self.context = nn.Sequential(nn.Linear(4 * d, d), nn.GELU(), nn.Dropout(dropout), nn.Linear(d, d))
         self.type_head = nn.Linear(d, n_types)
         self.type_embed = nn.Embedding(n_types, d)
@@ -77,9 +81,20 @@ class UnitPolicy(nn.Module):
         highest = units.masked_fill(~mask.unsqueeze(-1), -1e9).amax(1)
         resources = self.resources_in(torch.log1p(batch["resources"].clamp(min=0)))
         context = self.context(torch.cat([mean, highest, resources, units[rows, batch["unit"]]], -1))
-        context = context + self.append_embed(batch["append"]) + self.place_in(batch["place"])
+        context = context + self.append_embed(batch["append"]) + self.place_in(batch["place"]) \
+            + self.home_in(batch["home"]) + self.counts_in(self.own_counts(batch))
         type_logits = self.type_head(context) + self.prior[batch["def_id"][rows, batch["unit"]]]
         return units, context, type_logits
+
+    def own_counts(self, batch):
+        """[B, unit types]: log(1 + number of finished own units of each type), or zeros when the
+        batch says counts are not used. batch["other"] holds build progress (1) and is-own (3)."""
+        counts = torch.zeros(len(batch["unit"]), self.prior.shape[0], device=batch["mask"].device)
+        if batch.get("use_counts"):
+            finished_own = (batch["mask"] & (batch["other"][..., 1] >= 1) & (batch["other"][..., 3] > 0)).float()
+            counts.scatter_add_(1, batch["def_id"], finished_own)
+            counts[:, 0] = 0                                  # number 0 = a unit type not seen in training
+        return torch.log1p(counts)
 
     def target_logits(self, units, context, mask):
         scores = (self.target_key(units) @ self.target_query(context).unsqueeze(-1)).squeeze(-1)
@@ -104,19 +119,23 @@ class UnitPolicy(nn.Module):
         return parts, type_logits.argmax(-1) == batch["type"]
 
     @torch.no_grad()
-    def act(self, batch, allowed, temperature=1.0, targets=None):
+    def act(self, batch, allowed, temperature=1.0, targets=None, position_temperature=None):
         """One order for one acting unit (B = 1). `allowed` [n_types] bool: the types to choose from.
         `targets`: a function, order type number -> [1,K] bool, the units that type may point at.
         temperature 0 = always the most likely choice, 1 = drawn from the predicted distribution."""
-        def choose(logits):
+        def choose(logits, temperature=temperature):
             if temperature <= 0:
                 return logits.argmax(-1)
             return torch.distributions.Categorical(logits=logits / temperature).sample()
 
+        # the offset classes can be sampled more sharply than the order type: their tails reach
+        # several thousand elmos, and one such draw sends a builder across the map
+        spread = temperature if position_temperature is None else position_temperature
+
         units, context, type_logits = self.encode(batch)
         order_type = choose(type_logits.masked_fill(~allowed, -1e9))
         after_type = context + self.type_embed(order_type)
-        dx = choose(self.dx_head(after_type))
+        dx = choose(self.dx_head(after_type), spread)
         option_logits = self.options_head(after_type)[0]
         if temperature <= 0:
             options = option_logits > 0
@@ -124,7 +143,7 @@ class UnitPolicy(nn.Module):
             options = torch.bernoulli(torch.sigmoid(option_logits / temperature)).bool()
         others = targets(int(order_type)) if targets else batch["mask"]
         return {"type": int(order_type), "dx": int(dx),
-                "dz": int(choose(self.dz_head(after_type + self.dx_embed(dx)))),
+                "dz": int(choose(self.dz_head(after_type + self.dx_embed(dx)), spread)),
                 "target": int(choose(self.target_logits(units, after_type, others))),
                 "facing": int(choose(self.facing_head(after_type))),
                 "radius": int(choose(self.radius_head(after_type))),

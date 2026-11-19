@@ -31,12 +31,15 @@ HEADS = ("type", "target", "dx", "dz", "facing", "radius", "options")
 
 def load(data_dir, matches):
     """Join the matches' files into one set of arrays; states and units are renumbered to fit."""
-    parts = {name: [] for name in EXAMPLE_FIELDS + UNIT_FIELDS + ("type_key", "resources", "offsets")}
+    parts = {name: [] for name in EXAMPLE_FIELDS + UNIT_FIELDS + ("type_key", "resources", "offsets", "home")}
     states = units = 0
     for match in matches:
         with np.load(data_dir / f"{match['replay_id']}.npz") as file:
             for name in parts:
-                values = file[name]
+                if name == "home" and "home" not in file:       # datasets made before "home" existed
+                    values = np.zeros((len(file["resources"]), 2), np.float32)
+                else:
+                    values = file[name]
                 if name == "state":
                     values = values + states
                 if name == "offsets":
@@ -70,6 +73,7 @@ def to_tensors(data, vocab, device):
         out[name] = torch.tensor(numbered(data[name], vocab["commands"]), device=device)
     out["numbers"] = torch.tensor(data["numbers"], device=device)
     out["resources"] = torch.tensor(data["resources"], device=device)
+    out["home"] = torch.tensor(data["home"], device=device)
     out["offsets"] = torch.tensor(data["offsets"], device=device)
     return out
 
@@ -96,6 +100,9 @@ def batch_of(tensors, index, flip=False):
     reference = torch.where(batch["append"][:, None] == 1, acting[:, 6:8], acting[:, 0:2])
     batch["relative"] = numbers[:, :, 0:2] - reference[:, None]
     batch["place"] = reference / 4096 if tensors["map_position"] else torch.zeros_like(reference)
+    # how far, and which way, the reference point is from where the team started
+    batch["home"] = (reference - tensors["home"][state]) / 4096 if tensors["use_home"] else torch.zeros_like(reference)
+    batch["use_counts"] = tensors["use_counts"]
     batch["other"] = numbers[:, :, 2:6]
     if flip:
         mirror = torch.rand(len(index), 2, device=index.device) < 0.5           # [B, (x, z)]
@@ -165,6 +172,13 @@ def main():
     parser.add_argument("--map-position", action="store_true",
                         help="give the model the reference point's map coordinates (for data from ONE "
                              "map, played on that map; turns the mirror augmentation off)")
+    parser.add_argument("--home", action="store_true",
+                        help="give the model the reference point's offset from the team's start position "
+                             "(needs a dataset with 'home', see build_dataset_barb.py)")
+    parser.add_argument("--counts", action="store_true",
+                        help="give the model the number of finished own units of every unit type")
+    parser.add_argument("--acting", choices=["all", "builders", "others"], default="all",
+                        help="learn only the orders given to unit types that build, or only the others'")
     parser.add_argument("--eval-every", type=int, default=250)
     parser.add_argument("--select", default="play", help="validation number that picks the checkpoint")
     parser.add_argument("--eval-examples", type=int, default=16000,
@@ -183,6 +197,19 @@ def main():
     split = {name: [m for m in manifest["matches"] if m["split"] == name]
              for name in ("train", "validation", "test")}
     train = load(data_dir, split["train"])
+    validation = load(data_dir, split["validation"])
+    if args.acting != "all":
+        # Keep only the examples whose acting unit is (or is not) a unit type that builds: a
+        # type that got at least one build or factory order in the train matches. The states
+        # stay whole; only which unit's order is learned changes.
+        def acting(data):
+            return data["def_id"][data["offsets"][data["state"]] + data["unit"]]
+        is_build = np.array([key.endswith(("@build", "@factory")) for key in train["type_key"].tolist()])
+        builder_defs = np.unique(acting(train)[is_build])
+        for data in (train, validation):
+            keep = np.isin(acting(data), builder_defs) == (args.acting == "builders")
+            for name in EXAMPLE_FIELDS + ("type_key",):
+                data[name] = data[name][keep]
 
     # Vocabularies from the train matches only. An order type needs 2 examples to get in.
     type_counts = Counter(train["type_key"].tolist())
@@ -221,9 +248,11 @@ def main():
     prior = torch.log(table / table.sum(1, keepdim=True))
 
     tensors = {"train": to_tensors(train, vocab, args.device),
-               "validation": to_tensors(load(data_dir, split["validation"]), vocab, args.device)}
+               "validation": to_tensors(validation, vocab, args.device)}
     for part in tensors.values():
         part["map_position"] = args.map_position
+        part["use_home"] = args.home
+        part["use_counts"] = args.counts
     is_build = torch.tensor([key.endswith(("@build", "@factory")) for key in vocab["types"]], device=args.device)
     model = UnitPolicy(prior, len(vocab["commands"]) + 1, args.d, args.layers, dropout=args.dropout).to(args.device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -240,7 +269,7 @@ def main():
     curve, best, started = [start_row], None, time.time()
     for step in range(1, args.steps + 1):
         index = torch.randint(examples, (args.batch,), device=args.device)
-        batch = batch_of(tensors["train"], index, flip=not (args.no_flip or args.map_position))
+        batch = batch_of(tensors["train"], index, flip=not (args.no_flip or args.map_position or args.home))
         # bfloat16 inside the model: about half the GPU memory and time of float32
         with torch.autocast("cuda", dtype=torch.bfloat16, enabled=args.device == "cuda"):
             parts = model.losses(batch)[0]
@@ -260,7 +289,8 @@ def main():
                 best = row
                 torch.save({"source": "standin", "weights": model.state_dict(), "vocab": vocab,
                             "command_of": command_of, "allowed": allowed, "target_sides": target_sides,
-                            "model": {"d": args.d, "layers": args.layers, "map_position": args.map_position},
+                            "model": {"d": args.d, "layers": args.layers, "map_position": args.map_position,
+                                      "home": args.home, "counts": args.counts},
                             "step": step}, out_dir / "unit_policy.pt")
     # The selected step once more, on every validation example (the curve used a sample).
     model.load_state_dict(torch.load(out_dir / "unit_policy.pt", weights_only=False)["weights"])

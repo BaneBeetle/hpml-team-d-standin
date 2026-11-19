@@ -347,6 +347,197 @@ retry in place):
 - 20:49: `easier_suite.json` (`easier-v1`: the idle opponent three times, simple-constructor
   and simple-defender once each, 20 minute cap) with `unit-v2b` plus `unit-barb-v2a` as the
   army checkpoint, then with `unit-v2b` alone. Not part of the pilot's comparison.
+- `easier-v1` (20:49 to 21:20): against the idle opponent all six games reached the cap with
+  value killed 0 (`unit-v2b` plus `unit-barb-v2a` as army: 106, 103, 64 finished units at
+  the last decision; `unit-v2b` alone: 124, 175, 97). simple-constructor: cap (two-model),
+  lost at 11:49 (alone). simple-defender: cap for both, value killed 899 and 584.
+- 22:50, asked by Brian ("on a branch so a teammate can access it"; of the choices he took
+  his own private repo, code and notes only): a copy was staged in
+  `C:\Users\lolly\bar-standins\export\hpml-team-d-standin` (93 files, 11 MB: `standin_eval/`
+  without run folders, the Team C stand-in server as `team-c-standin/`,
+  `shared/endpoint_adapter.py`, `shared/CONTRACT.md`, the notes, result rows, tables,
+  charts and four replay screenshots, a README) and pushed as one commit to the new
+  private repository `BaneBeetle/hpml-team-d-standin`, branch `main`. Left out: `.env`,
+  checkpoints, datasets, recordings, run folders, the other 50 screenshots, and the other
+  teams' code. Scanned for keys and e-mail addresses before the push: none found. The team
+  repository `Na00s/hpml` was not touched; its push addresses are still disabled. Nobody
+  was invited to the new repository.
+- Why no kills against the idle opponent, from `game_20261118_204932` (`unit-v2b` plus
+  `unit-barb-v2a` as army, null-1; the other start spot is at (4600, 7400), 3,905 elmos from
+  ours): 9 combat units at 12:00, 50 at 20:00; their median distance to the enemy start was
+  5,765 at 12:00 and 4,571 at 20:00; 485 MOVE / FIGHT orders to them with a mean progress
+  toward the enemy start of +68 elmos per order (median 0, 48% forward).
+- The same measure on BARb's own orders (team 0's non-builder units in three recordings of
+  2026-11-18): MOVE, 25,981 orders, mean progress -16 (quartiles -223 / -8 / +198); FIGHT,
+  3,746 orders, mean +281 (quartiles -11 / +237 / +514).
+- `unit-barb-v2a` asked for FIGHT orders only, in a made-up state at team 0's base: mean
+  progress -86 (armpw) and -196 (armham), 41% forward. The recordings have Armada on both
+  start spots (swapped-sides games), and the model had no input saying which spot is ours.
+- Added (23:10): `home`, the reference point minus the team's start position / 4096
+  (`build_dataset_barb.py` stores each team's first own unit position per state;
+  `train.py --home`; `home_in` in `model.py`; `unit_server.py` takes the first own unit of
+  the first observation after a reset). `STANDIN_ARMY_TYPES` limits the army checkpoint to
+  the listed order types. Dataset `unit-barb-v3` (= `unit-barb-v2` plus `home`), checkpoint
+  `unit-barb-v3a`.
+- `unit-barb-v3a` (`unit-barb-v3`, `--map-position --home --d 192 --layers 3`, 12,000 steps,
+  1,185 s): validation type accuracy 0.892, dx / dz loss 2.60 / 2.41 (`unit-barb-v2a`: 0.896,
+  2.61 / 2.42). Probe, FIGHT orders only, armpw at four places from team 0's base toward
+  the other spot, with the base's units placed where the base is: at temperature 1, 53% to
+  62% of the orders reduce the distance to the enemy start (median progress +42 to +130
+  elmos); at 0.5, 70% to 75% (+157 to +293); at 0.2, 93% to 97% (+292 to +293).
+- `unit_server.py`: `STANDIN_ARMY_TEMPERATURE` (the army checkpoint's own sampling
+  temperature). 23:25: `easier-v1` with `unit-v2b` (temperature 1) plus `unit-barb-v3a` as
+  army, `STANDIN_ARMY_TYPES=FIGHT@pos,ATTACK@unit`, `STANDIN_ARMY_TEMPERATURE=0.2`; label
+  `unit-v2b+army-v3a-fight`.
+- FIRST WIN. `unit-v2b+army-v3a-fight` on `easier-v1` (23:12 to 23:27): null-3,
+  `game_20261118_232242`, "game over at 16:46 game time (frame 30198), Winner: team 0
+  (armada, OUR_MODEL_unit-v2b)" against the idle opponent (NullAI in team 1's slot); value
+  killed 3,133, lost 1,119; team 0's front-line stat 59 / 46 / 59 at minutes 12 to 16;
+  replay in the run folder's `demos`. The other four games: null-1 cap (front line 0 all
+  game, value killed 0, 123 finished units), null-2 cap (front line up to 11, killed 0,
+  112 units), simple-constructor-1 lost at 9:37 (killed 0, lost 7,652), simple-defender-1
+  lost at 6:38 (killed 1,214, lost 5,423). In the earlier `easier-v1` runs those two were
+  cap / lost at 11:49 (simple-constructor) and cap / cap (simple-defender).
+- 23:29: the same setup started on the pilot list (`pilot-v1`).
+- `unit-v2b+army-v3a-fight` on the pilot list (23:29 to 23:46): 0 won / 6 lost / 0 cap, lost
+  at 11:12, 10:42, 9:30, 8:12, 9:18 and 17:12; value killed 1,259 to 2,678, lost 4,770 to
+  13,613. (`unit-v2b-cd90` alone: 0 / 2 / 4.)
+- Replay screenshots of the win: `slides_2026-11-18/replay_first-win_idle-opponent/` (26
+  images; the set named `minute_16` was taken as the game ended).
+- `unit_server.py`: `STANDIN_ARMY_SHARE` (the share of the non-building units, picked by
+  unit id, that follow the army checkpoint; the rest follow the main one). 23:47: pilot
+  with share 0.5, label `unit-v2b+army-v3a-fight-half`.
+- `unit-v2b+army-v3a-fight-half` on the pilot list (23:47 to 23:53): 0 won / 5 lost / 1 cap;
+  lost at 11:18, 9:30, 5:06, 9:30, 12:24; value killed 378 to 4,363.
+- From the kept requests of those games and of `unit-v2b-cd90`'s: in the five losses the
+  commander's last observation had 3 to 18 units of the other team within 700 elmos and 0
+  to 4 own units; it was 241 to 3,317 elmos from its start. In `unit-v2b-cd90`'s two
+  losses: 3 and 4 other-team units near, 1,536 and 3,917 elmos from its start. In the games
+  that reached the cap the commander ended 1,244 to 8,880 elmos from its start.
+- Added (23:58): `counts`, log(1 + number of finished own units) per unit type as one more
+  input (`counts_in` and `own_counts` in `model.py`, `train.py --counts`, the server sets
+  `use_counts` from the checkpoint). `unit-v2c` = `unit-v2b`'s settings plus `--counts`.
+- `unit-v2c` (`unit-v2`, `--counts`, 4,000 steps, 342 s): validation sample at step 4000:
+  type accuracy 0.789, build type accuracy 0.528, build type loss 2.175 (`unit-v2b` at step
+  4000: 0.786, 0.607, 1.833). Not played. 00:02 (2026-11-19): `unit-barb-v3b` =
+  `unit-barb-v3a`'s settings plus `--counts`, training.
+- 00:08 the app was restarted by Brian; the training process kept running.
+  `unit-barb-v3b` (12,000 steps, 1,757 s): validation build type accuracy 0.176, build type
+  loss 2.515 (`unit-barb-v3a`: 0.170, 2.555). Not played.
+- When team 0 gets its first factory and combat units (kept requests of `unit-v2b-cd90`'s
+  pilot games against four recordings of BARb in the same seat):
+  `unit-v2b-cd90`: first factory at 4:29, 4:42, 5:13, 10:48, 12:27, never; combat units
+  at 10:00: 0 to 8. `unit-barb-v2a`: first factory at 0:49, 0:50, 1:02, 7:02, never, never;
+  combat units at 10:00: 0 to 2. BARb: first factory at 1:16, 1:16, 1:16, 2:01; combat
+  units at 10:00: 16, 53, 29, 31; extractors 7 to 11; wind + solar 23 to 39.
+- BARb's commander in the first 1:30 of three recordings (every order): armmex, armmex,
+  armmex, armwin, armwin, armlab at 0:53 or 0:54, then armllt or a GUARD; each build is
+  preceded by a REMOVE and followed by a REPAIR on the thing being built.
+- Probe: `unit-barb-v3a` and `unit-barb-v3b`, commander, build orders only, made-up states
+  from "nothing built" to "3 extractors, 3 wind, 1 lab": the probability of a factory is
+  0.00 to 0.03 in every state; armmex and armwin take 0.6 to 1.0.
+- `unit-barb-v3` train split by acting unit (from `unit-barb-v1`'s count: armcom 1,512 of
+  104,892; armlab 101): the orders to units that build are a few per cent of the examples.
+- Added (00:40): `train.py --acting builders|others` (learn only the orders given to unit
+  types that build, or only the others'); `STANDIN_MAIN_TYPES` in `unit_server.py`
+  (`@build,@factory` = build orders only). Training `unit-barb-econ-v1`: `unit-barb-v3`,
+  `--acting builders --map-position --home --counts --d 192 --layers 3`, 6,000 steps.
+- `unit-barb-econ-v1` (38,006 train examples, 4,109 validation; 6,000 steps, 974 s):
+  validation type accuracy 0.577, build type accuracy 0.257 (`unit-barb-v3b` on all units:
+  0.176). On BARb's real recorded states of two train recordings (commander, build orders
+  only): it gives the recorded type 1.00, 1.00, 1.00, 0.96 for the first four armmex, 0.30
+  and 0.84 for the two armwin, and 0.17 to 0.18 for armlab at 0:53 (armwin 0.72 to 0.74
+  there). In the made-up probe states it gave a factory 0.00 to 0.02, so that probe does
+  not stand for real states.
+- 00:52: pilot with `unit-barb-econ-v1` as main (`STANDIN_MAIN_TYPES=@build,@factory`) and
+  `unit-barb-v3a` as army (FIGHT / ATTACK only, temperature 0.2, share 0.5; the other half
+  of the non-building units gets no orders). Label `econ-v1+army-v3a-half`.
+- `econ-v1+army-v3a-half` on the pilot list (00:52 to 01:06): 0 won / 5 lost / 1 cap; lost
+  at 18:06, 6:30, 18:12, 18:24, 17:54; value killed 230 to 6,148, lost 5,833 to 25,023.
+  First factory at 1:36, 4:06, 1:23, 1:30, 0:31, 3:31; combat units at 10:00: 5, 0, -, 14,
+  27, 20; wind + solar at 10:00: 4, 0, -, 14, 8, 10 (BARb: 23 to 39).
+- In those games: army orders 826 / 678 / 436 against builder orders 500 / 457 / 446 in the
+  three barb-easy games. In `simple-2` the commander got "build armmex" at the same metal
+  spot 4 to 9 times in a row, 3 s apart, appended to its queue, and the energy income was
+  30 (no wind turbine finished) for the whole game; 44 orders were dropped by the widget
+  with "no place to build it" (armlab 21, armsolar 13, armvp 9).
+- BARb gives its commander one build at a time (queue empty when the next one comes), so
+  this model is now served with `STANDIN_QUEUE_DEPTH=1`. Also changed: units of the main
+  checkpoint are picked before the army's (`unit_server.py`); the widget looks for a
+  build site within 1,200 elmos instead of 512. Label `econ-v1+army-v3a-half-q1` (01:10).
+- `econ-v1+army-v3a-half-q1` on the pilot list (01:10 to 01:22): 0 won / 1 lost / 5 cap (the
+  loss: barb-easy-3 at 13:12). First factory at 1:29, 1:39, 1:47, 1:21, 1:40, 1:42. At
+  10:00: combat units 5, 22, 5, 18, 16, 19; extractors 8, 10, 7, 13, 8, 3; wind + solar 7,
+  18, 7, 11, 16, 3. Max metal income 20.1 to 48.7. Value killed 2,733 to 5,391, lost 6,628
+  to 13,970. Finished units at the last decision 7, 76, 26, 93, 59, 0.
+- 01:23: two more pilot runs with the same main checkpoint and settings, one after the
+  other: `econ-v1+army-v3a-all-q1` (army share 1, FIGHT / ATTACK only, temperature 0.2) and
+  `econ-v1+army-v3a-mix-q1` (army share 1, every order type the army checkpoint learned,
+  temperature 0.5).
+- `econ-v1+army-v3a-all-q1` on the pilot list (01:23 to 01:34): 0 won / 2 lost / 4 cap.
+  simple-1 to -3, all cap: value killed / lost 7,536 / 5,166, 4,038 / 2,437, 9,254 / 5,325;
+  finished units at the last decision 141, 130, 109; max metal income 59.2, 41.6, 48.0; max
+  energy income 815, 1,200, 671. barb-easy: cap (330 / 13,809, 33 units), lost at 10:36,
+  lost at 14:00.
+- `econ-v1+army-v3a-mix-q1` (01:34 to 01:44): 0 won / 4 lost / 2 cap; lost at 4:54, 16:48,
+  5:30, 8:06.
+- 01:45: `econ-v1+army-v3a-all-q1` started on `pilot_suite_cap40.json` (the same six games,
+  40 minute cap).
+- `econ-v1+army-v3a-all-q1` with the 40 minute cap (01:45 to 01:59; rows in
+  `benchmark/pilot-v1-cap40/`): 0 won / 6 lost / 0 cap. simple: lost at 19:59, 13:46, 39:14
+  (value killed / lost 6,782 / 33,974, 6,159 / 19,160, 24,615 / 132,316); barb-easy: lost at
+  11:20, 30:17, 21:19. The same setup's three simple games with the 20 minute cap had all
+  reached the cap with more value killed than lost.
+- Added (02:01): `STANDIN_ARMY_WAVE` in `unit_server.py`, a hand-written rule (not learned):
+  army units get no orders until that many are waiting, then all waiting ones are released
+  together. Pilot runs `econ-v1+army-v3a-wave15` and `-wave30` (army share 1, FIGHT /
+  ATTACK only, temperature 0.2, 20 minute cap), one after the other.
+- FIRST WIN AGAINST A PLAYING OPPONENT. `econ-v1+army-v3a-wave15` on the pilot list (02:01 to
+  02:12): 1 won / 3 lost / 2 cap. simple-1, `game_20261119_020057`: "game over at 16:43 game
+  time (frame 30109), Winner: team 0 (armada, OUR_MODEL_unit-barb-econ-v1)" against
+  SimpleAI; value killed 8,683, lost 2,064; 132 finished units at the last decision; replay
+  in the run folder's `demos`. The other five: simple-2 lost at 13:54, simple-3 lost at
+  14:12, barb-easy-1 cap (killed 7,032 / lost 6,660, 115 units), barb-easy-2 lost at 12:12,
+  barb-easy-3 cap (6,344 / 10,879). Settings of the win (its `run_settings.json`): main
+  `unit-barb-econ-v1` with `STANDIN_MAIN_TYPES=@build,@factory`, `STANDIN_QUEUE_DEPTH=1`;
+  army `unit-barb-v3a` with `STANDIN_ARMY_TYPES=FIGHT@pos,ATTACK@unit`,
+  `STANDIN_ARMY_TEMPERATURE=0.2`, `STANDIN_ARMY_SHARE=1`, `STANDIN_ARMY_WAVE=15`; main
+  temperature 1, sampling seed 1.
+- `econ-v1+army-v3a-wave30` (02:12 to 02:18): 0 won / 6 lost / 0 cap, lost at 5:54, 8:18,
+  15:36, 11:12, 8:30, 10:30.
+- Replay screenshots of that win: `slides_2026-11-18/replay_first-win_vs-simpleai/` (27
+  images, every 2 game minutes and at game over).
+- 02:25: `pilot_suite_more.json` (`pilot-v1-more`: six more repeats against each of simple
+  and barb-easy, repeat numbers 4 to 9, 20 minute cap) with the winning setup, label
+  `econ-v1+army-v3a-wave15`.
+- `econ-v1+army-v3a-wave15` on `pilot-v1-more` (02:22 to 02:39): 0 won / 9 lost / 3 cap.
+  simple: lost at 10:59, 13:33, 8:17, 4:03, 16:08, then cap (killed 6,109 / lost 3,764, 194
+  units). barb-easy: cap, lost at 11:26, 4:58, 9:27, cap (5,867 / 6,505, 162 units), lost at
+  8:18. With the six pilot-v1 games that setup stands at 1 won / 12 lost / 5 cap in 18.
+- The commander in the six pilot-v1 games of that setup: 1,400 to 2,600 elmos from its
+  start by minute 3 to 5 in most games; in the four losses its last observation had 7 to
+  16 other-team units within 700 elmos and 1 or 2 own units; in the win it was 2,561 from
+  its start with 24 own units near. BARb's own commander (four recordings) was at most
+  1,500 to 2,300 from its start in any minute.
+- The widget's extractor placement had no distance limit: an extractor order went to the
+  nearest free metal spot anywhere on the map. Now an extractor order is dropped when no
+  free spot is within 800 elmos of the ordered position (`place()` in
+  `standin_control.lua`). 02:45: `pilot-v1-more` again with that, label `wave15-snap800`.
+- `wave15-snap800` on `pilot-v1-more` (02:45 to 02:59): 0 won / 6 lost / 6 cap (before the
+  limit: 0 / 9 / 3). Lost at 9:52, 5:32, 5:01, 14:08, 9:10, 17:11. The commander still got
+  2,000 to 5,400 elmos from its start in most games; in the two losses near minute 5 its
+  last observation had 1 other-team unit within 700 elmos.
+- Added (03:01): `STANDIN_POSITION_TEMPERATURE` (`unit_server.py`; `position_temperature`
+  in `UnitPolicy.act`): the main checkpoint's dx / dz classes are sampled at their own
+  temperature. `wave15-snap800-pos0.5` = the same setup with it at 0.5, on `pilot-v1-more`.
+- `wave15-snap800-pos0.5` on `pilot-v1-more` (03:02 to 03:21): 0 won / 6 lost / 6 cap; lost
+  at 14:10, 18:56, 18:32, 6:29, 19:46, 12:25 (without it: 9:52, 5:32, 5:01, 14:08, 9:10,
+  17:11). Value killed in the six simple games 6,018 to 7,674 (without: 455 to 4,899).
+- 03:22: the session's usage limit was reached; no job is running. State of the loop: two
+  wins so far (`game_20261118_232242` against the idle opponent, `game_20261119_020057`
+  against SimpleAI); the winning setup stands at 1 won in 18 pilot games. Not yet tried:
+  group sizes between 15 and 30 or below 15, the 40 minute cap with the current setup, a
+  retrained builder model, more games per setup.
 - 18:31: started recording 24 more games of BARb (default profile, team 0, Armada) against
   simple (12) and barb-easy (12), the pilot's seat and opponents, for `unit-barb-v2`.
 
