@@ -1,0 +1,19 @@
+{
+ "source": "standin",
+ "name": "pilot-v1",
+ "note": "Local pilot for EVAL-03. A stand-in fixture, not the team's frozen benchmark. Every other pinned setting (engine, BAR commit, start positions, end rule, debug commands) is in each run folder's run_settings.json.",
+ "map": "Supreme Isthmus v2.1",
+ "team_0": "Armada: the policy under test",
+ "team_1": "Cortex: the opponent",
+ "place_builds": true,
+ "save_replay": true,
+ "repeat_meaning": "Games differ run to run even with the engine's fixed seed, so a repeat is one more independent game. For a sampled policy the repeat number is also its sampling seed.",
+ "episodes": [
+  {"id": "simple-1", "opponent": "simple", "cap_minutes": 20, "repeat": 1},
+  {"id": "simple-2", "opponent": "simple", "cap_minutes": 20, "repeat": 2},
+  {"id": "simple-3", "opponent": "simple", "cap_minutes": 20, "repeat": 3},
+  {"id": "barb-easy-1", "opponent": "barb-easy", "cap_minutes": 20, "repeat": 1},
+  {"id": "barb-easy-2", "opponent": "barb-easy", "cap_minutes": 20, "repeat": 2},
+  {"id": "barb-easy-3", "opponent": "barb-easy", "cap_minutes": 20, "repeat": 3}
+ ]
+}

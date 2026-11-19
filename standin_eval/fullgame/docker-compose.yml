@@ -1,0 +1,48 @@
+# Runs one headless BAR game using BAR's own tools/headless_testing image.
+# Same setup as BAR's tools/headless_testing/docker-compose.yml, except:
+#   - the engine is pinned with the CUSTOM_ENGINE_URL build arg (value in .env)
+#   - the game checkout comes from $BAR_DIR instead of a relative path
+#   - the startscript is chosen with $STARTSCRIPT instead of the baked-in startscript.txt
+#   - a per-run folder ($RUN_DIR) is mounted at /bar/LuaUI/Widgets/harness_run
+#   - the harness widget (widgets/harness_teamstats.lua) is mounted as a user widget
+# Run it through scripts/run_smoke.sh, which sets BAR_DIR, RUN_DIR and STARTSCRIPT.
+#
+# STAND-IN COPY of bar-harness docker-compose.yml (the original is untouched). Changed here:
+#   - project name and image tag, so this copy never rebuilds or reuses bar-harness's own
+#     image tag or its "cache" volume (the build is the same Dockerfile and engine pin)
+#   - two more read-only mounts at the end of "volumes": the control widget and its helper
+name: bar-standin
+
+services:
+  bar:
+    image: bar-standin-headless:recoil-${ENGINE_VERSION:?set in .env}
+    build:
+      context: ${BAR_DIR:?export BAR_DIR or use scripts/run_smoke.sh}/tools/headless_testing
+      args:
+        CUSTOM_ENGINE_URL: ${ENGINE_URL:?set in .env}
+    volumes:
+      - ${BAR_DIR}:/bar/games/BAR.sdd:ro
+      - cache:/bar/cache
+      # Per-run folder: holds the startscript used and the widget's teamstats.json.
+      # It sits under LuaUI/Widgets because BAR lets user widgets write only to LuaUI/Config
+      # and LuaUI/Widgets (luaui/barwidgets.lua), and start.sh deletes LuaUI/Config each run.
+      # Widgets are only loaded from *.lua files, so nothing in here is loaded as one.
+      - ${RUN_DIR:-./runs/manual}:/bar/LuaUI/Widgets/harness_run
+      # Step 2: the team stats dump widget, loaded as a user widget.
+      - ./widgets/harness_teamstats.lua:/bar/LuaUI/Widgets/harness_teamstats.lua:ro
+      # STAND-IN: the policy control widget, loaded as a second user widget.
+      - ./widgets/standin_control.lua:/bar/LuaUI/Widgets/standin_control.lua:ro
+      # STAND-IN: the order recorder for BARb vs BARb games (active only with record_config.json).
+      - ./widgets/standin_recorder.lua:/bar/LuaUI/Widgets/standin_recorder.lua:ro
+      # STAND-IN: the observation helper from the hpml repo (team-d/lua), unchanged. It sits
+      # outside LuaUI/Widgets so it is not loaded as a widget; user widgets may read under LuaUI/.
+      - ../../lua/bar_proof_common.lua:/bar/LuaUI/hpml/bar_proof_common.lua:ro
+    # start.sh (BAR's) clears LuaUI/Config, then runs:
+    #   spring-headless --isolation --write-dir /bar <startscript>
+    entrypoint:
+      - /bar/start.sh
+      - /bar
+      - ${STARTSCRIPT:-/bar/games/BAR.sdd/tools/headless_testing/startscript_barb_smoke.txt}
+
+volumes:
+  cache:

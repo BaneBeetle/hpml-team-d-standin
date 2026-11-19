@@ -1,0 +1,2 @@
+# run_live.sh runs inside WSL: keep Unix line endings even on a Windows checkout.
+*.sh text eol=lf

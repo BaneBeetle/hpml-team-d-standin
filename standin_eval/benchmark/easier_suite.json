@@ -1,0 +1,43 @@
+{
+ "source": "standin",
+ "name": "easier-v1",
+ "note": "Easier opponents than pilot-v1, to look for a first win: the idle opponent (it never gives an order) and two SimpleAI variants. A stand-in fixture, not part of the pilot's comparison.",
+ "map": "Supreme Isthmus v2.1",
+ "team_0": "Armada: the policy under test",
+ "team_1": "Cortex: the opponent",
+ "place_builds": true,
+ "save_replay": true,
+ "repeat_meaning": "Games differ run to run even with the engine's fixed seed, so a repeat is one more independent game. For a sampled policy the repeat number is also its sampling seed.",
+ "episodes": [
+  {
+   "id": "null-1",
+   "opponent": "null",
+   "cap_minutes": 20,
+   "repeat": 1
+  },
+  {
+   "id": "null-2",
+   "opponent": "null",
+   "cap_minutes": 20,
+   "repeat": 2
+  },
+  {
+   "id": "null-3",
+   "opponent": "null",
+   "cap_minutes": 20,
+   "repeat": 3
+  },
+  {
+   "id": "simple-constructor-1",
+   "opponent": "simple-constructor",
+   "cap_minutes": 20,
+   "repeat": 1
+  },
+  {
+   "id": "simple-defender-1",
+   "opponent": "simple-defender",
+   "cap_minutes": 20,
+   "repeat": 1
+  }
+ ]
+}

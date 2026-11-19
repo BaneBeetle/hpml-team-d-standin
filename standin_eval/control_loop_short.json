@@ -1,0 +1,11 @@
+{
+  "protocol_version": 1,
+  "decision_interval_frames": 15,
+  "simulation_hz": 30,
+  "startup_timeout_seconds": 240,
+  "policy_timeout_seconds": 3,
+  "frame_timeout_seconds": 30,
+  "run_timeout_seconds": 120,
+  "seed": 1,
+  "timing_mode": "stepped"
+}

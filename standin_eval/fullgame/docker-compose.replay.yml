@@ -1,0 +1,7 @@
+# STAND-IN: used together with docker-compose.yml only when run_game.py gets --save-replay.
+# The engine writes its replay (demo) file into /bar/demos. This mount puts that folder inside
+# the run folder, so the file is still there after the container is removed.
+services:
+  bar:
+    volumes:
+      - ${RUN_DIR:-./runs/manual}/demos:/bar/demos
